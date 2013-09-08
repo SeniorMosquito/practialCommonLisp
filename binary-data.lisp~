@@ -1,0 +1,47 @@
+(in-package :cl-user)
+
+(defpackage :com.gigamonkeys.binary-data
+  (:use :common-lisp :com.gigamonkeys.macro-utilities)
+  (:export :define-binary-class
+           :define-tagged-binary-class
+           :define-binary-type
+           :read-value
+           :write-value
+           :*in-progress-objects*
+           :parent-of-type
+           :current-binary-object
+           :+null+))
+
+(in-package :com.gigamonkeys.binary-data)
+
+(defun as-keyword (sym) (intern (string sym) :keyword))
+
+(defun slot->defclass-slot (spec)
+  (let ((name (first spec)))
+    `(,name :initarg ,(as-keyword name) :accessor ,name)))
+
+(defmacro define-binary-class (name slots)
+  (with-gensyms (typevar objectvar streamvar)
+  `(progn
+     `(defclass ,name ()
+	,(mapcar #'slot->defclass-slot slots))
+
+     (defmethod read-value ((,typevar (eql ',name)) ,streamvar &key)
+       (let ((,objectvar (make-instance ',name)))
+	 (with-slots ,(mapcar #'first slots) ,objectvar
+	   ,@(mapcar #'(lambda (x) (slot->read-value x streamvar)) slots))
+	 ,objectvar)))))
+
+(defgeneric read-value (type stream &key)
+  (:documentation "Read a value of the given type from the stream."))
+
+;(defmethod read-value ((type (eql 'iso-8859-1-string)) in &key length)
+
+(defun slot->read-value (spec stream)
+  (destructuring-bind (name (type &rest args)) (normalize-slot-spec spec)
+    `(setf ,name (read-value ',type ,stream ,@args))))
+
+(defun normalize-slot-spec (spec)
+  (list (first spec) (mklist (second spec))))
+
+(defun mklist (x) (if (listp x) x (list x)))
